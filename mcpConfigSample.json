@@ -1,0 +1,12 @@
+{
+    "weather": {
+        "command": "node",
+        "args": [
+            "/path/to/weather-server/build/index.js"
+        ]
+    },
+    "wikipediaSearch": {
+        "type": "http",
+        "url": "http://localhost:3000/mcp"
+    }
+}

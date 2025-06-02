@@ -2,8 +2,10 @@ import { config } from 'dotenv';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import readline from 'readline/promises';
-import { GoogleGenAI, mcpToTool } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
+import mcpConfig from './mcpConfig.json' with { type: 'json' };
 
 config();
 
@@ -93,6 +95,7 @@ const MCPAgent = class {
         let response;
         while (true) {
             response = await this.googleLLM.models.generateContent({
+                // model: 'gemini-2.0-flash-lite',
                 model: 'gemini-2.0-flash',
                 contents: currentContents,
                 config: {
@@ -161,22 +164,32 @@ const MCPAgent = class {
     }
 }
 
+const getMCPClients = (mcpConfig) => {
+    return Object.entries(mcpConfig).map(([name, config]) => {
+        if (!("url" in config)) {
+            return new MCPClient(name, new StdioClientTransport({
+                command: config.command,
+                args: config.args,
+            }));
+        } else if (config.type === 'http') {
+            return new MCPClient(name, new StreamableHTTPClientTransport(config.url));
+        } else if (config.type === 'sse') {
+            return new MCPClient(name, new SSEClientTransport(config.url));
+        } else {
+            throw new Error(`Unknown transport type: ${config.type}`);
+        }
+    })
+}
+
 const main = async () => {
     try {
-        const mcpClient1 = new MCPClient("Weather Forecast", new StdioClientTransport({
-            command: "/Users/sudiptakundu/.nvm/versions/node/v22.13.1/bin/node",
-            args: ["/Users/sudiptakundu/repos/mcp/mcpServers/quickstart-resources/weather-server-typescript/build/index.js"],
-        }));
-
-        const mcpClient2 = new MCPClient("Wikipedia Search", new StreamableHTTPClientTransport("http://localhost:3000/mcp"));
-
         const llm = new GoogleGenAI({
             apiKey: process.env.GOOGLE_API_KEY,
             maxTokens: 1000,
             temperature: 0.7,
         });
 
-        const agent = new MCPAgent(llm, [mcpClient1, mcpClient2]);
+        const agent = new MCPAgent(llm, getMCPClients(mcpConfig));
         await agent.chatLoop();
         process.exit(0);
     } catch (error) {
